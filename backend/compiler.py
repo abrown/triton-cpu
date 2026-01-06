@@ -1,4 +1,5 @@
 from importlib.metadata import metadata
+import logging
 import tempfile
 import functools
 import hashlib
@@ -205,7 +206,8 @@ class CPUBackend(BaseBackend):
 
     @staticmethod
     def make_library(src, metadata, options):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        keep_artifacts = int(os.environ.get("TRITON_CPU_KEEP_ARTIFACTS", 0)) == 1
+        with tempfile.TemporaryDirectory(delete=not keep_artifacts) as tmpdir:
             asm_path = os.path.join(tmpdir, "kernel.s")
             Path(asm_path).write_text(src)
             lib_dirs = cpu_driver.library_dirs()
@@ -219,6 +221,7 @@ class CPUBackend(BaseBackend):
             if cpu_driver.is_macos():
                 ccflags.extend(["-undefined", "dynamic_lookup"])
             so = _build("kernel", asm_path, tmpdir, lib_dirs, include_dirs, libs, ccflags)
+            logging.info('Compiled CPU kernel to shared library: %s', so)
             with open(so, "rb") as f:
                 return f.read()
 
