@@ -28,13 +28,50 @@ namespace mlir::triton::cpu {
 std::function<unsigned(Operation *)>
 getCPUAllocationAnalysisScratchSize(TargetInfo &targetInfo) {
   auto allocation = [&targetInfo](Operation *op) -> unsigned {
-    // NOTE: these allocations are 128-bit aligned by default
-    // see AllocationAnalysis::getScratchValueSize
+    // Handle operations that legitimately need scratch memory on CPU
+    if (auto reduceOp = dyn_cast<ReduceOp>(op)) {
+      ReduceOpHelper helper(reduceOp);
+      return llvm::alignTo(helper.getScratchSizeInBytes(), 64);
+    }
 
-    // pad all per-op shared memory allocations to 64-byte alignment so the
-    // barrier synchronization buffers are properly aligned
-    return llvm::alignTo(
-        mlir::triton::defaultAllocationAnalysisScratchSizeFn(op), 64);
+    if (auto scanOp = dyn_cast<ScanOp>(op)) {
+      ScanLoweringHelper helper(scanOp);
+      return llvm::alignTo(helper.getScratchSizeInBytes(), 64);
+    }
+
+    if (auto gatherOp = dyn_cast<GatherOp>(op)) {
+      GatherLoweringHelper helper(gatherOp);
+      return llvm::alignTo(helper.getScratchSizeInBytes(), 64);
+    }
+
+    // CPU doesn't need shared memory for layout conversions
+    // Just use local memory/registers instead
+    if (auto cvtLayout = dyn_cast<gpu::ConvertLayoutOp>(op)) {
+      // Return 0 - CPU doesn't use shared memory for layout conversions
+      // The conversion happens via vector operations in registers
+      return 0;
+    }
+
+    // Handle atomic operations if they need scratch space
+    if (isa<AtomicRMWOp, AtomicCASOp>(op)) {
+      auto value = op->getOperand(0);
+      auto smemShape = getRepShapeForAtomic(op->getResult(0));
+      auto elems = getNumScratchElements(smemShape);
+      if (elems == 0)
+        return 0;
+      auto elemTy = getElementTypeOrSelf(getPointeeType(value.getType()));
+      return llvm::alignTo(
+          elems * std::max<int>(8, elemTy.getIntOrFloatBitWidth()) / 8, 64);
+    }
+
+    // CPU doesn't have histogram or TMA operations
+    // If they appear, return minimal scratch
+    if (isa<HistogramOp>(op)) {
+      return 0; // CPU doesn't support histogram op
+    }
+
+    // No scratch memory needed for this operation
+    return 0;
   };
 
   return allocation;
