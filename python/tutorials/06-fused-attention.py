@@ -32,6 +32,10 @@ def is_cuda():
     return triton.runtime.driver.active.get_current_target().backend == "cuda"
 
 
+def is_cpu():
+    return triton.runtime.driver.active.get_current_target().backend == "cpu"
+
+
 def supports_host_descriptor():
     return is_cuda() and torch.cuda.get_device_capability()[0] >= 9
 
@@ -125,7 +129,7 @@ def _host_descriptor_pre_hook(nargs):
     nargs["desc_o"].block_shape = [BLOCK_M, HEAD_DIM]
 
 
-if is_hip():
+if is_hip() or is_cpu():
     NUM_STAGES_OPTIONS = [1]
 elif supports_host_descriptor():
     NUM_STAGES_OPTIONS = [2, 3, 4]
@@ -133,11 +137,11 @@ else:
     NUM_STAGES_OPTIONS = [2, 3, 4]
 
 configs = [
-    triton.Config({'BLOCK_M': BM, 'BLOCK_N': BN}, num_stages=s, num_warps=w, pre_hook=_host_descriptor_pre_hook) \
-    for BM in [64, 128]\
-    for BN in [32, 64, 128]\
-    for s in NUM_STAGES_OPTIONS \
-    for w in [4, 8]\
+    triton.Config({'BLOCK_M': BM, 'BLOCK_N': BN}, num_stages=s, num_warps=w, pre_hook=_host_descriptor_pre_hook)
+    for BM in [64, 128]
+    for BN in [32, 64, 128]
+    for s in NUM_STAGES_OPTIONS
+    for w in [1, 4, 8]
 ]
 if "PYTEST_VERSION" in os.environ:
     # Use a single config in testing for reproducibility
@@ -149,8 +153,11 @@ if "PYTEST_VERSION" in os.environ:
 def keep(conf):
     BLOCK_M = conf.kwargs["BLOCK_M"]
     BLOCK_N = conf.kwargs["BLOCK_N"]
-    return not (is_cuda() and torch.cuda.get_device_capability()[0] == 9 and BLOCK_M * BLOCK_N < 128 * 128
-                and conf.num_warps == 8)
+    if is_cuda() and torch.cuda.get_device_capability()[0] == 9 and BLOCK_M * BLOCK_N < 128 * 128 and conf.num_warps == 8:
+        return False
+    if is_cpu() and conf.num_warps != 1:
+        return False
+    return True
 
 
 def prune_invalid_configs(configs, named_args, **kwargs):
@@ -712,14 +719,13 @@ for HEAD_DIM in [64, 128]:
                         x_names=["N_CTX"],
                         x_vals=[2**i for i in range(10, 15)],
                         line_arg="provider",
-                        line_vals=["triton-fp16"] + (["triton-fp8"] if TORCH_HAS_FP8 else []) +
-                        (["flash"] if HAS_FLASH else []),
-                        line_names=["Triton [FP16]"] + (["Triton [FP8]"] if TORCH_HAS_FP8 else []) +
-                        (["Flash-2"] if HAS_FLASH else []),
+                        line_vals=["triton-fp16"] + (["triton-fp8"] if TORCH_HAS_FP8 else [])
+                        + (["flash"] if HAS_FLASH else []),
+                        line_names=["Triton [FP16]"] + (["Triton [FP8]"] if TORCH_HAS_FP8 else [])
+                        + (["Flash-2"] if HAS_FLASH else []),
                         styles=[("red", "-"), ("blue", "-"), ("green", "-")],
                         ylabel="TFLOPS",
-                        plot_name=
-                        f"fused-attention-batch{BATCH}-head{N_HEADS}-d{HEAD_DIM}-{mode}-causal={causal}-warp_specialize={warp_specialize}",
+                        plot_name=f"fused-attention-batch{BATCH}-head{N_HEADS}-d{HEAD_DIM}-{mode}-causal={causal}-warp_specialize={warp_specialize}",
                         args={
                             "H": N_HEADS,
                             "BATCH": BATCH,
