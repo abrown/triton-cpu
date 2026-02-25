@@ -219,6 +219,8 @@ class CPUBackend(BaseBackend):
                 ccflags.extend(["-Xlinker", "-rpath", "-Xlinker", lib_dir])
             if cpu_driver.is_macos():
                 ccflags.extend(["-undefined", "dynamic_lookup"])
+            if cpu_driver.is_debug_build():
+                ccflags.append("-g")
             so = _build("kernel", asm_path, tmpdir, lib_dirs, include_dirs, libs, ccflags)
             with open(so, "rb") as f:
                 return f.read()

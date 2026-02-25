@@ -42,6 +42,10 @@ include_dirs = [os.path.join(dirname, "include")] + [
 libdevice_dir = os.path.join(dirname, "lib")
 libraries = ["boost_fiber", "boost_context"]
 
+@functools.lru_cache()
+def is_debug_build():
+    return os.environ.get("TRITON_CPU_DEBUG", "0") == "1"
+
 
 @functools.lru_cache()
 def system_ccflags():
@@ -49,6 +53,8 @@ def system_ccflags():
     if is_macos():
         ccflags.extend(["-undefined", "dynamic_lookup", "-Xclang"])
     ccflags.extend(["-fopenmp"])
+    if is_debug_build():
+        ccflags.append("-g")
     return ccflags
 
 
