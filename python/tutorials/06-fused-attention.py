@@ -719,13 +719,14 @@ for HEAD_DIM in [64, 128]:
                         x_names=["N_CTX"],
                         x_vals=[2**i for i in range(10, 15)],
                         line_arg="provider",
-                        line_vals=["triton-fp16"] + (["triton-fp8"] if TORCH_HAS_FP8 else [])
-                        + (["flash"] if HAS_FLASH else []),
-                        line_names=["Triton [FP16]"] + (["Triton [FP8]"] if TORCH_HAS_FP8 else [])
-                        + (["Flash-2"] if HAS_FLASH else []),
+                        line_vals=["triton-fp16"] + (["triton-fp8"] if TORCH_HAS_FP8 else []) +
+                        (["flash"] if HAS_FLASH else []),
+                        line_names=["Triton [FP16]"] + (["Triton [FP8]"] if TORCH_HAS_FP8 else []) +
+                        (["Flash-2"] if HAS_FLASH else []),
                         styles=[("red", "-"), ("blue", "-"), ("green", "-")],
                         ylabel="TFLOPS",
-                        plot_name=f"fused-attention-batch{BATCH}-head{N_HEADS}-d{HEAD_DIM}-{mode}-causal={causal}-warp_specialize={warp_specialize}",
+                        plot_name=
+                        f"fused-attention-batch{BATCH}-head{N_HEADS}-d{HEAD_DIM}-{mode}-causal={causal}-warp_specialize={warp_specialize}",
                         args={
                             "H": N_HEADS,
                             "BATCH": BATCH,
