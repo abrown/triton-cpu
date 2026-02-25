@@ -138,8 +138,8 @@ else:
 
 configs = [
     triton.Config({'BLOCK_M': BM, 'BLOCK_N': BN}, num_stages=s, num_warps=w, pre_hook=_host_descriptor_pre_hook)
-    for BM in [64, 128]
-    for BN in [32, 64, 128]
+    for BM in [1, 64, 128]
+    for BN in [1, 32, 64, 128]
     for s in NUM_STAGES_OPTIONS
     for w in [1, 4, 8]
 ]
@@ -153,9 +153,10 @@ if "PYTEST_VERSION" in os.environ:
 def keep(conf):
     BLOCK_M = conf.kwargs["BLOCK_M"]
     BLOCK_N = conf.kwargs["BLOCK_N"]
-    if is_cuda() and torch.cuda.get_device_capability()[0] == 9 and BLOCK_M * BLOCK_N < 128 * 128 and conf.num_warps == 8:
+    if is_cuda() and torch.cuda.get_device_capability(
+    )[0] == 9 and BLOCK_M * BLOCK_N < 128 * 128 and conf.num_warps == 8:
         return False
-    if is_cpu() and conf.num_warps != 1:
+    if is_cpu() and (conf.num_warps != 1 or BLOCK_M > 16 or BLOCK_N > 16):
         return False
     return True
 
