@@ -206,7 +206,7 @@ class CPUBackend(BaseBackend):
 
     @staticmethod
     def make_library(src, metadata, options):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(delete=not cpu_driver.is_debug_build()) as tmpdir:
             asm_path = os.path.join(tmpdir, "kernel.s")
             Path(asm_path).write_text(src)
             lib_dirs = cpu_driver.library_dirs()
