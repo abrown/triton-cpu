@@ -32,6 +32,10 @@ def is_cuda():
     return triton.runtime.driver.active.get_current_target().backend == "cuda"
 
 
+def is_cpu():
+    return triton.runtime.driver.active.get_current_target().backend == "cpu"
+
+
 def supports_host_descriptor():
     return is_cuda() and torch.cuda.get_device_capability()[0] >= 9
 
