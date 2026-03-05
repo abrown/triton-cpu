@@ -129,7 +129,7 @@ def _host_descriptor_pre_hook(nargs):
     nargs["desc_o"].block_shape = [BLOCK_M, HEAD_DIM]
 
 
-if is_hip():
+if is_hip() or is_cpu():
     NUM_STAGES_OPTIONS = [1]
 elif supports_host_descriptor():
     NUM_STAGES_OPTIONS = [2, 3, 4]
