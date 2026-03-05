@@ -4,6 +4,7 @@
 #include "triton/Dialect/Triton/IR/Utility.h"
 #include "llvm/Support/Debug.h"
 
+#include "cpu/include/Dialect/TritonCPU/IR/Attributes.h"
 #include "cpu/include/Dialect/TritonCPU/IR/Dialect.h"
 
 #define DEBUG_TYPE "tritoncpu-make-persistent-kernel"
@@ -19,14 +20,9 @@ namespace cpu {
 
 namespace {
 
-static LogicalResult addPidSentinel(triton::FuncOp funcOp,
-                                    unsigned blockIdxArgPos) {
+static LogicalResult addPidSentinel(triton::FuncOp funcOp) {
   Block &entry = funcOp.getBody().front();
-  Value blockIdx = entry.getArgument(blockIdxArgPos);
-
   OpBuilder b(&entry, entry.begin());
-  Value currentBlockOp = triton::cpu::CurrentBlockOp::create(
-      b, funcOp.getLoc(), blockIdx.getType(), blockIdx);
 
   SmallVector<triton::GetProgramIdOp> pidOps;
   for (auto pidOp : entry.getOps<triton::GetProgramIdOp>()) {
@@ -167,6 +163,13 @@ static triton::FuncOp buildWrapper(ModuleOp mod, triton::FuncOp kernel,
 
   scf::ForOp forOp =
       scf::ForOp::create(wb, wrap.getLoc(), bStart, bEnd, bStep, ValueRange{});
+
+  // Tag the loop with a `ttc.persistent_loop` attribute so that it can be
+  // identified when lowering `ttc.block_id`.
+  Attribute persistentLoop = triton::cpu::PersistentLoopAttr::get(ctx);
+  forOp->setAttr("ttc.persistent_loop", persistentLoop);
+
+  // Call the `<kernel>.impl` function within the loop.
   {
     Block *body = forOp.getBody();
     OpBuilder fb(body, body->begin());
@@ -214,8 +217,7 @@ struct MakePersistentKernelPass
         cloneTTFuncWithExtraI32Arg(moduleOp, kernel, implName);
 
     // 2. Rewrite every `tt.get_program_id` operation to a `ttc.block_index`.
-    unsigned blockIdxOffset = implFunc.getNumArguments() - 1;
-    if (failed(addPidSentinel(implFunc, blockIdxOffset)))
+    if (failed(addPidSentinel(implFunc)))
       return signalPassFailure();
 
     // 3. Add the wrapper function calling kernel_impl in a loop over

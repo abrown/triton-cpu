@@ -5,6 +5,7 @@ add_triton_library(TritonCPUTransforms
 
     DEPENDS
     TritonCPUTransformsIncGen
+    TritonCPUAttrsIncGen
 
     LINK_LIBS PUBLIC
     TritonGPUIR

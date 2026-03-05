@@ -3,7 +3,6 @@
 
 include "TritonCPUDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td" // Pure
-include "mlir/Interfaces/InferTypeOpInterface.td" // SameOperandsAndResultType
 include "triton/Dialect/Triton/IR/TritonTypes.td"
 include "triton/Dialect/Triton/IR/TritonAttrDefs.td"
 
@@ -36,22 +35,6 @@ def TTC_BlockIdOp : TTC_Op<"block_id", []> {
     int32_t getAxisAsInt() {
       return static_cast<int32_t>(getAxis());
     }
-  }];
-}
-
-def TTC_CurrentBlockOp : TTC_Op<"current_block", [SameOperandsAndResultType]> {
-  let summary = "The current block ID for this kernel invocation.";
-
-  let description = [{
-    Get the current block ID within the loop over blocks for this persistent kernel.
-  }];
-
-  let arguments = (ins AnyType:$input);
-
-  let results = (outs AnyType:$result);
-
-  let assemblyFormat = [{
-    $input attr-dict `:` type($result)
   }];
 }
 

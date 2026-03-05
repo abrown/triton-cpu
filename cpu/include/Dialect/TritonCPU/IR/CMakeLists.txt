@@ -10,3 +10,8 @@ mlir_tablegen(Ops.cpp.inc -gen-op-defs)
 add_mlir_doc(TritonCPUDialect TritonCPUDialect dialects/ -gen-dialect-doc)
 add_mlir_doc(TritonCPUOps TritonCPUOps dialects/ -gen-op-doc)
 add_public_tablegen_target(TritonCPUTableGen)
+
+set(LLVM_TARGET_DEFINITIONS TritonCPUAttrs.td)
+mlir_tablegen(Attrs.h.inc -gen-attrdef-decls)
+mlir_tablegen(Attrs.cpp.inc -gen-attrdef-defs)
+add_public_tablegen_target(TritonCPUAttrsIncGen)

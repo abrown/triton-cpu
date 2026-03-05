@@ -4,6 +4,7 @@ add_triton_library(TritonCPUIR
 
   DEPENDS
   TritonCPUTableGen
+  TritonCPUAttrsIncGen
 
   LINK_LIBS PUBLIC
   TritonIR

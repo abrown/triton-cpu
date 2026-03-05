@@ -1,6 +1,7 @@
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 
 #include "cpu/include/Dialect/TritonCPU/IR/Dialect.h"
 #include "triton/Conversion/TritonGPUToLLVM/Utility.h"
@@ -20,6 +21,8 @@ constexpr int kBlockEnd = 1;
 constexpr int kThreadId = 2;
 
 } // namespace LaunchIDOffsets
+
+static constexpr StringLiteral kAttrPersistentLoop("ttc.persistent_loop");
 
 class ThreadIdOpToLLVM : public ConvertOpToLLVMPattern<mlir::gpu::ThreadIdOp> {
 
@@ -145,22 +148,21 @@ public:
            "Launch id argument must be a pointer");
 
     auto currentBlockId = [&]() -> Value {
-      auto llvmFunc = cast<LLVM::LLVMFuncOp>(funcOp);
-      auto currentBlockIdOps =
-          llvm::to_vector(llvmFunc.getOps<cpu::CurrentBlockOp>());
-      if (currentBlockIdOps.empty()) {
-        // Grab the block start argument and assume there is only one block--a
-        // non-persistent kernel.
-        auto b = TritonLLVMOpBuilder(blockIdOp.getLoc(), rewriter);
-        auto idxTy = this->getTypeConverter()->convertType(blockIdOp.getType());
-        auto gep = b.gep(ptr_ty(rewriter.getContext()), idxTy, arg,
-                         b.i32_val(LaunchIDOffsets::kBlockStart));
-        return b.load(idxTy, gep);
-      } else {
-        assert(currentBlockIdOps.size() <= 1 &&
-               "expected at most one CurrentBlockOp");
-        return currentBlockIdOps[0].getResult();
+      for (Operation *parent = blockIdOp->getParentOp(); parent;
+           parent = parent->getParentOp()) {
+        if (auto forOp = dyn_cast<scf::ForOp>(parent);
+            forOp && forOp->hasAttr(kAttrPersistentLoop)) {
+          return forOp.getInductionVar();
+        }
       }
+
+      // Grab the block start argument and assume there is only one block--a
+      // non-persistent kernel.
+      auto b = TritonLLVMOpBuilder(blockIdOp.getLoc(), rewriter);
+      auto idxTy = this->getTypeConverter()->convertType(blockIdOp.getType());
+      auto gep = b.gep(ptr_ty(rewriter.getContext()), idxTy, arg,
+                       b.i32_val(LaunchIDOffsets::kBlockStart));
+      return b.load(idxTy, gep);
     };
 
     auto programIdDim = blockIdOp.getAxis();
@@ -314,19 +316,6 @@ private:
   const int funcArgIndexOffset;
 };
 
-struct CurrentBlockConversion
-    : public ConvertOpToLLVMPattern<cpu::CurrentBlockOp> {
-  CurrentBlockConversion(LLVMTypeConverter &converter, PatternBenefit benefit)
-      : ConvertOpToLLVMPattern(converter, benefit) {}
-
-  LogicalResult
-  matchAndRewrite(cpu::CurrentBlockOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOp(op, op.getInput());
-    return success();
-  }
-};
-
 } // namespace
 
 void mlir::triton::cpu::populateGPUtoLLVMConversionPatterns(
@@ -342,6 +331,4 @@ void mlir::triton::cpu::populateGPUtoLLVMConversionPatterns(
       typeConverter, LaunchIDOffsets::kBlockStart, benefit);
   patterns.add<BlockIndexOpConversion<mlir::triton::cpu::BlockEndOp>>(
       typeConverter, LaunchIDOffsets::kBlockEnd, benefit);
-  patterns.add<CurrentBlockConversion>(
-      typeConverter, PatternBenefit(benefit.getBenefit() - 1));
 }
