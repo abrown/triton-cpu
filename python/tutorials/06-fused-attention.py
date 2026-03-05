@@ -141,7 +141,7 @@ configs = [
     for BM in [64, 128]\
     for BN in [32, 64, 128]\
     for s in NUM_STAGES_OPTIONS \
-    for w in [4, 8]\
+    for w in [1, 4, 8]\
 ]
 if "PYTEST_VERSION" in os.environ:
     # Use a single config in testing for reproducibility
@@ -153,8 +153,11 @@ if "PYTEST_VERSION" in os.environ:
 def keep(conf):
     BLOCK_M = conf.kwargs["BLOCK_M"]
     BLOCK_N = conf.kwargs["BLOCK_N"]
-    return not (is_cuda() and torch.cuda.get_device_capability()[0] == 9 and BLOCK_M * BLOCK_N < 128 * 128
-                and conf.num_warps == 8)
+    if is_cuda() and torch.cuda.get_device_capability()[0] == 9 and BLOCK_M * BLOCK_N < 128 * 128 and conf.num_warps == 8:
+        return False
+    if is_cpu() and conf.num_warps != 1:
+        return False
+    return True
 
 
 def prune_invalid_configs(configs, named_args, **kwargs):
