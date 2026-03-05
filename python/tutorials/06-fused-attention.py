@@ -627,7 +627,7 @@ class _attention(torch.autograd.Function):
 
 attention = _attention.apply
 
-TORCH_HAS_FP8 = hasattr(torch, 'float8_e5m2')
+TORCH_HAS_FP8 = hasattr(torch, 'float8_e5m2') and not is_cpu()
 
 
 @pytest.mark.parametrize("Z", [1, 4])
@@ -704,7 +704,7 @@ try:
 except BaseException:
     HAS_FLASH = False
 
-TORCH_HAS_FP8 = hasattr(torch, 'float8_e5m2')
+TORCH_HAS_FP8 = hasattr(torch, 'float8_e5m2') and not is_cpu()
 BATCH, N_HEADS = 4, 32
 # vary seq length for fixed head and batch=4
 configs = []
