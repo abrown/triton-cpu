@@ -553,7 +553,8 @@ class _attention(torch.autograd.Function):
         def alloc_fn(size: int, align: int, _):
             return torch.empty(size, dtype=torch.int8, device="cuda")
 
-        triton.set_allocator(alloc_fn)
+        if is_cuda():
+            triton.set_allocator(alloc_fn)
 
         def grid(META):
             return (triton.cdiv(q.shape[2], META["BLOCK_M"]), q.shape[0] * q.shape[1], 1)
